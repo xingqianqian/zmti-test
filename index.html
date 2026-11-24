@@ -1550,23 +1550,10 @@ function shakeGate(){
   if(b&&b.animate) b.animate([{transform:"translateX(0)"},{transform:"translateX(-8px)"},{transform:"translateX(8px)"},{transform:"translateX(0)"}],{duration:280});
 }
 
-/* 扣一次机会：云端可用走数据库；不可用自动降级到本机计次，绝不阻断测试 */
+/* 扣一次机会：统一走本机计次，不依赖数据库，任何网络环境都不阻断测试 */
 async function consumeUse(){
   const p=activePass();
   if(!p){ openGate(); return false; }
-  const mode=await cloudMode();
-  if(mode==="cloud"){
-    try{
-      const res=await sbRpc("consume_pass",{p_code:p});
-      if(res.ok) return true;
-      if(res.reason==="exhausted"){ errGate("该密码的 3 次机会已用完，请联系客服"); openGate(); return false; }
-      errGate("密码已失效，请重新输入"); openGate(); return false;
-    }catch(e){
-      // 云端临时不可用 → 静默切离线，本次照常放行
-      try{ sessionStorage.setItem("zmti_net_mode","offline"); }catch(err){}
-      modePromise=Promise.resolve("offline");
-    }
-  }
   if(localRemaining(p)<=0){
     errGate("该密码的 3 次机会已用完，请联系客服");
     openGate(); return false;
@@ -1586,15 +1573,8 @@ function openGate(){
   }else if($("gateUse")){ $("gateUse").textContent="每个密码可测试 3 次"; }
   setTimeout(()=>{ if($("passInput")) $("passInput").focus(); },80);
 }
-async function refreshGateUse(p){
+function refreshGateUse(p){
   if(!$("gateUse")) return;
-  const mode=await cloudMode();
-  if(mode==="cloud"){
-    try{
-      const res=await sbRpc("check_pass",{p_code:p},2200);
-      if(res.ok){ $("gateUse").textContent="当前密码剩余 "+res.remaining+" 次测试机会"; return; }
-    }catch(e){}
-  }
   $("gateUse").textContent="当前密码剩余 "+localRemaining(p)+" 次测试机会";
 }
 function closeGate(){ $("gate").style.display="none"; }
